@@ -1,9 +1,9 @@
 import DashboardNavbar from "~/components/DashboardNavbar";
-import ProtectedRoute from "../components/ProtectedRoute";
+import ProtectedRoute from "../../components/ProtectedRoute";
 import DashboardView from "~/components/DashboardView";
 
 
-export default function Dashboard() {
+export default function Repos() {
 
   return (
     <ProtectedRoute>

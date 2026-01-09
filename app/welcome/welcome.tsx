@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Github } from "lucide-react";
 import {
@@ -6,45 +6,71 @@ import {
   GithubAuthProvider,
   onAuthStateChanged,
 } from "firebase/auth";
-import type { UserCredential } from "firebase/auth";
+
 import { auth } from "../lib/firebase";
+import { ensureUserDocument } from "../lib/ensureUser";
+import { useAuth } from "../context/authContext";
 
 export function Welcome() {
   const navigate = useNavigate();
-  const [githubToken, setGithubToken] = useState<string | null>(null);
+  const { setUser, setGithubToken, loading, setLoading } = useAuth();
 
+  // 🔹 Listen to auth state changes (optional, keeps user logged in across refresh)
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
-      if (user) {
-        navigate("/dashboard");
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setLoading(false);
+        return;
       }
+
+      setUser(user);
+
+      try {
+        await ensureUserDocument(user);
+      } catch (err) {
+        console.error("Failed to sync user to Firestore", err);
+      }
+
+      setLoading(false);
+      navigate("/dashboard");
     });
 
     return unsubscribe;
-  }, [navigate]);
+  }, [navigate, setUser, setLoading]);
 
+  // 🔹 Handle GitHub login
   const handleGitHubLogin = async () => {
-    try {
-      const provider = new GithubAuthProvider();
+  setLoading(true);
 
-      // Optional: request additional scopes
-      // provider.addScope("repo");
-      // provider.addScope("read:org");
+  try {
+    const provider = new GithubAuthProvider();
+    provider.addScope("repo");
 
-      const result: UserCredential = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
 
-      // ✅ Correctly extract GitHub token from the popup result
-      const credential = GithubAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken || null;
+    setUser(user);
+    setGithubToken(GithubAuthProvider.credentialFromResult(result)?.accessToken ?? null);
 
-      setGithubToken(token);
-      console.log("GitHub Access Token:", token);
+    // 🔹 Firestore sync immediately after login
+    await ensureUserDocument(user);
 
-      // Redirect is handled by auth listener
-    } catch (error) {
-      console.error("GitHub login failed", error);
-    }
-  };
+    navigate("/dashboard");
+  } catch (err) {
+    console.error("GitHub login failed", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen text-white bg-zinc-950">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <main className="flex items-center justify-center h-screen bg-zinc-950 px-4">
