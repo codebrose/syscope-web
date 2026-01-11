@@ -13,7 +13,6 @@ import { useAuth } from "~/context/authContext";
 
 interface AddRepoPopupProps {
   open: boolean;
-  githubToken: string | null;
   onClose: () => void;
 }
 
@@ -25,17 +24,20 @@ interface GitHubRepo {
   description: string | null;
 }
 
-export default function AddRepoPopup({
-  open,
-  githubToken,
-  onClose,
-}: AddRepoPopupProps) {
+export default function AddRepoPopup({ open, onClose }: AddRepoPopupProps) {
   const { user } = useAuth();
 
   const [repos, setRepos] = useState<GitHubRepo[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [githubToken, setGithubToken] = useState<string | null>(null);
+
+  // 🔑 Load GitHub token from localStorage
+  useEffect(() => {
+    if (!open) return;
+    setGithubToken(localStorage.getItem("githubToken"));
+  }, [open]);
 
   // ---------------------------
   // Fetch GitHub Repositories
@@ -154,7 +156,9 @@ export default function AddRepoPopup({
             </h2>
 
             {loading && (
-              <p className="text-zinc-400 text-sm">Loading repositories…</p>
+              <p className="text-zinc-400 text-sm">
+                Loading repositories…
+              </p>
             )}
 
             {error && (
