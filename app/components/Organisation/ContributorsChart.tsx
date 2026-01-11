@@ -1,14 +1,34 @@
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
-import type { Contributor } from "../OrganisationDetailsView";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import { useOrgRecentCommits } from "~/hooks/useOrgRecentCommits";
 
-function ContributorsChart({ contributors }: { contributors: Contributor[] }) {
+function ContributorsChart() {
+  const { weeklyChartData, contributors, loading } =
+    useOrgRecentCommits();
+
+  if (loading) return null;
+
   return (
-    <div className="h-64">
+    <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={contributors}>
-          <XAxis dataKey="login" hide />
+        <BarChart data={weeklyChartData}>
+          <XAxis dataKey="week" />
           <Tooltip />
-          <Bar dataKey="commits" />
+          <Legend />
+
+          {contributors.map((c) => (
+            <Bar
+              key={c.login}
+              dataKey={c.login}
+              stackId="a"
+            />
+          ))}
         </BarChart>
       </ResponsiveContainer>
     </div>

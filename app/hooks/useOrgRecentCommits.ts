@@ -12,9 +12,26 @@ interface OrgRepo {
   full_name: string;
 }
 
+interface WeeklyContributorData {
+  week: string; // e.g. "2026-01-01"
+  [contributor: string]: number | string;
+}
+
+function getWeekStart(date: Date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
 export function useOrgRecentCommits() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [weeklyChartData, setWeeklyChartData] = useState<
+    WeeklyContributorData[]
+  >([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -25,7 +42,7 @@ export function useOrgRecentCommits() {
       setLoading(true);
 
       try {
-        /* 1️⃣ Fetch repos from Firestore */
+        /* 1️⃣ Fetch repos */
         const q = query(
           collection(db, "orgRepos"),
           orderBy("createdAt", "desc")
@@ -37,18 +54,14 @@ export function useOrgRecentCommits() {
           full_name: d.data().full_name,
         }));
 
-        if (repos.length === 0) {
-          setCommits([]);
-          setContributors([]);
-          return;
-        }
+        if (!repos.length) return;
 
         /* 2️⃣ Fetch commits */
         const allCommits: Commit[] = [];
 
         for (const repo of repos) {
           const res = await fetch(
-            `https://api.github.com/repos/${repo.full_name}/commits?per_page=10`,
+            `https://api.github.com/repos/${repo.full_name}/commits?per_page=50`,
             {
               headers: {
                 Authorization: `Bearer ${githubToken}`,
@@ -72,7 +85,7 @@ export function useOrgRecentCommits() {
           });
         }
 
-        /* 3️⃣ Sort commits (latest first) */
+        /* 3️⃣ Latest commits */
         allCommits.sort(
           (a, b) =>
             new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -80,20 +93,18 @@ export function useOrgRecentCommits() {
 
         setCommits(allCommits.slice(0, 10));
 
-        /* 4️⃣ Group by author → Leaderboard */
+        /* 4️⃣ Contributor leaderboard */
         const contributorMap = new Map<string, Contributor>();
 
         allCommits.forEach((c) => {
-          const key = c.author;
-
-          if (!contributorMap.has(key)) {
-            contributorMap.set(key, {
-              login: key,
+          if (!contributorMap.has(c.author)) {
+            contributorMap.set(c.author, {
+              login: c.author,
               avatar: c.avatar,
               commits: 1,
             });
           } else {
-            contributorMap.get(key)!.commits += 1;
+            contributorMap.get(c.author)!.commits += 1;
           }
         });
 
@@ -102,6 +113,34 @@ export function useOrgRecentCommits() {
         );
 
         setContributors(ranked);
+
+        /* 5️⃣ Weekly contributor analysis (for chart) */
+        const weeklyMap = new Map<string, Record<string, number>>();
+
+        allCommits.forEach((c) => {
+          const week = getWeekStart(new Date(c.date));
+
+          if (!weeklyMap.has(week)) {
+            weeklyMap.set(week, {});
+          }
+
+          const weekEntry = weeklyMap.get(week)!;
+          weekEntry[c.author] = (weekEntry[c.author] || 0) + 1;
+        });
+
+        const weeklyData: WeeklyContributorData[] = Array.from(
+          weeklyMap.entries()
+        )
+          .map(([week, data]) => ({
+            week,
+            ...data,
+          }))
+          .sort(
+            (a, b) =>
+              new Date(a.week).getTime() - new Date(b.week).getTime()
+          );
+
+        setWeeklyChartData(weeklyData);
       } catch (err) {
         console.error("Failed to fetch org commits", err);
       } finally {
@@ -112,5 +151,10 @@ export function useOrgRecentCommits() {
     fetchAll();
   }, []);
 
-  return { commits, contributors, loading };
+  return {
+    commits,
+    contributors,
+    weeklyChartData,
+    loading,
+  };
 }

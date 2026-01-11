@@ -32,73 +32,6 @@ export default function OrganisationDetailsView({
   const [commits, setCommits] = useState<Commit[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!repos.length) return;
-
-    const fetchCommits = async () => {
-      setLoading(true);
-
-      try {
-        const allCommits: Commit[] = [];
-
-        await Promise.all(
-          repos.map(async (repo) => {
-            const res = await fetch(
-              `https://api.github.com/repos/${orgName}/${repo.name}/commits?per_page=25`,
-              {
-                headers: {
-                  Authorization: `Bearer ${githubToken}`,
-                },
-              }
-            );
-
-            const data = await res.json();
-
-            data.forEach((c: any) => {
-              allCommits.push({
-                sha: c.sha,
-                author: c.author?.login || c.commit.author.name,
-                avatar: c.author?.avatar_url,
-                message: c.commit.message,
-                date: c.commit.author.date,
-              });
-            });
-          })
-        );
-
-        // Sort newest first and take 25 total
-        setCommits(
-          allCommits
-            .sort((a, b) => +new Date(b.date) - +new Date(a.date))
-            .slice(0, 25)
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCommits();
-  }, [repos, orgName, githubToken]);
-
-  /* ---------- LEADERBOARD ---------- */
-  const leaderboard = useMemo(() => {
-    const map = new Map<string, Contributor>();
-
-    commits.forEach((c) => {
-      if (!map.has(c.author)) {
-        map.set(c.author, {
-          login: c.author,
-          avatar: c.avatar,
-          commits: 1,
-        });
-      } else {
-        map.get(c.author)!.commits++;
-      }
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.commits - a.commits);
-  }, [commits]);
-
   return (
     <div className="w-[60%] bg-zinc-900/40 rounded-2xl p-6">
       {/* Tabs */}
@@ -131,7 +64,7 @@ export default function OrganisationDetailsView({
       )}
 
       {!loading && activeTab === "chart" && (
-        <ContributorsChart contributors={leaderboard} />
+        <ContributorsChart />
       )}
     </div>
   );
