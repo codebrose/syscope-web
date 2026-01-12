@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import type { GitHubRepo } from "./useGithubRepos";
 import type { Commit } from "../components/OrganisationDetailsView";
 
+const CACHE_KEY = "githubRecentCommits";
+const CACHE_EXPIRATION = 24 * 60 * 60 * 1000; // 24 hours
+
 export function useGithubRecentCommits(
   githubToken?: string | null,
   repos: GitHubRepo[] = []
@@ -12,10 +15,23 @@ export function useGithubRecentCommits(
   useEffect(() => {
     if (!githubToken || repos.length === 0) return;
 
-    const fetchCommits = async () => {
+    const loadCommits = async () => {
       setLoading(true);
 
       try {
+        // 1️⃣ Check cache first
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const now = Date.now();
+          if (now - parsed.timestamp < CACHE_EXPIRATION) {
+            setCommits(parsed.data);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // 2️⃣ Fetch commits from GitHub
         const allCommits: Commit[] = [];
 
         for (const repo of repos) {
@@ -43,12 +59,18 @@ export function useGithubRecentCommits(
           });
         }
 
-        // newest first
-        allCommits.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
+        // newest first, limit to 10
+        const latestCommits = allCommits
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 10);
 
-        setCommits(allCommits.slice(0, 10));
+        setCommits(latestCommits);
+
+        // 3️⃣ Save to cache with timestamp
+        localStorage.setItem(
+          CACHE_KEY,
+          JSON.stringify({ data: latestCommits, timestamp: Date.now() })
+        );
       } catch (error) {
         console.error("Failed to fetch GitHub commits", error);
       } finally {
@@ -56,7 +78,7 @@ export function useGithubRecentCommits(
       }
     };
 
-    fetchCommits();
+    loadCommits();
   }, [githubToken, repos]);
 
   return { commits, loading };

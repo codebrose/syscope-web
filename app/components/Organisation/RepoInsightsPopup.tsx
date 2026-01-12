@@ -21,6 +21,15 @@ type Props = {
   onClose: () => void;
 };
 
+/* ---------------- Stable color per contributor ---------------- */
+function stringToColor(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return `hsl(${Math.abs(hash) % 360}, 65%, 55%)`;
+}
+
 export default function RepoInsightsPopup({
   repoFullName,
   onClose,
@@ -183,11 +192,14 @@ export default function RepoInsightsPopup({
                     <XAxis dataKey="date" />
                     <Tooltip />
                     <Legend />
+
                     {contributors.map((name) => (
                       <Bar
                         key={name}
                         dataKey={name}
                         stackId="a"
+                        fill={stringToColor(name)}
+                        radius={[2, 2, 0, 0]}
                       />
                     ))}
                   </BarChart>

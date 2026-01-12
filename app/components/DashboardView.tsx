@@ -7,7 +7,20 @@ import StatCard from "../components/StatCards";
 import RecentActivity from "../components/RecentActivity";
 
 import { useGithubRepos } from "../hooks/useGithubRepos";
-import { useGithubRecentCommits } from "../hooks/useGithubRecentCommits";
+import { useGithubAllCommits } from "../hooks/useGithubAllCommits";
+
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../lib/firebase";
+
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 interface CardItem {
   label: string;
@@ -20,9 +33,25 @@ const DashboardView: React.FC = () => {
   const { user, githubToken } = useAuth();
 
   const { repos, loading: loadingRepos } = useGithubRepos(githubToken);
+  const { commits, dailyCommits, loading: loadingAllCommits } =
+    useGithubAllCommits(githubToken, repos);
 
-  const { commits, loading: loadingActivity } =
-    useGithubRecentCommits(githubToken, repos);
+  const [membersCount, setMembersCount] = React.useState<number | null>(
+    null
+  );
+
+  React.useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "orgMembers"));
+        setMembersCount(snapshot.size);
+      } catch (err) {
+        console.error("Failed to fetch members", err);
+        setMembersCount(0);
+      }
+    };
+    fetchMembers();
+  }, []);
 
   const cardData: CardItem[] = [
     {
@@ -39,7 +68,7 @@ const DashboardView: React.FC = () => {
     },
     {
       label: "Members",
-      value: 27,
+      value: membersCount ?? "Loading...",
       icon: Users,
       color: "bg-orange-500",
     },
@@ -47,24 +76,41 @@ const DashboardView: React.FC = () => {
 
   return (
     <div className="flex-1 p-6 w-full grid gap-6">
-      <div>
-        <h1 className="text-2xl font-bold mb-2">Dashboard</h1>
-        <p>Welcome, {user?.displayName || user?.email || "User"}</p>
-
-        {githubToken ? (
-          <p className="text-green-500">GitHub token available ✅</p>
-        ) : (
-          <p className="text-red-500">No GitHub token ❌</p>
-        )}
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {cardData.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
       </div>
 
-      <RecentActivity commits={commits} loading={loadingActivity} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        <RecentActivity commits={commits.slice(0, 10)} loading={loadingAllCommits} />
+
+        <div className="bg-zinc-900 rounded-xl p-4">
+          <h2 className="text-white font-medium mb-4">Daily Commits</h2>
+          {loadingAllCommits ? (
+            <p className="text-zinc-400 text-sm">Loading chart…</p>
+          ) : dailyCommits.length === 0 ? (
+            <p className="text-zinc-400 text-sm">No commits yet</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={dailyCommits}>
+                <CartesianGrid stroke="#2e2e2e" strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#f97316" // orange
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
